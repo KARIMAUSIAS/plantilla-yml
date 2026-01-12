@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "VPC basica con CIDR parametrizado"
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Description: "CIDR para la VPC (por ejemplo, 10.0.0.0/16)"
+    Default: "10.0.0.0/16"
+  
+  VpcName:
+    Type: String
+    Description: "Nombre para la VPC"
+    Default: "vpc-karim"
+
+  SubnetCidr:
+    Type: String
+    Description: "CIDR para la subred (por ejemplo, 10.0.1.0/24)"
+    Default: "10.0.1.0/24"
+
+  InstanceType:
+    Type: String
+    Description: "Tipo de instancia EC2"
+    Default: "t3.micro"
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "Par de claves para acceder por SSH a la instancia"
+  
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Description: "AMI ID para la instancia EC2"
+    Default: "ami-0fa3fe0fa7920f68e"
+
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref VpcName
+
+  MySubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref SubnetCidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${VpcName}-subnet-1"
+
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Permitir SSH a la instancia"
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${VpcName}-sg-ssh"
+
+  MyInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref MySubnet
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: !Ref AmiId
+      SecurityGroupIds:
+        - !Ref MySecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${VpcName}-ec2-1"
+
+Outputs:
+  VpcId:
+    Description: ID de la VPC creada
+    Value: !Ref MyVPC
+  
+  VpcName:
+    Description: Nombre de la VPC creada
+    Value: !Ref VpcName
+
+  SubnetId:
+    Description: ID de la subred creada
+    Value: !Ref MySubnet
+
+  InstanceId:
+    Description: ID de la instancia EC2 creada
+    Value: !Ref MyInstance
+
+  SecurityGroupId:
+    Description: ID del Security Group creado
+    Value: !Ref MySecurityGroup
