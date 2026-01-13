@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - qa
+      - beta
+      - prod
+    ConstraintDescription: Must be one of [dev, qa, beta, prod]
+
+Mappings:
+  EnvironmentMap:
+    dev:
+      qty: 1
+    qa:
+      qty: 1
+    beta:
+      qty: 2
+    prod:
+      qty: 5
+
+Resources:
+  DemoResource:
+    Type: AWS::S3::Bucket
+    Properties:
+      Tags:
+        - Key: InstanceQuantity
+          Value: !FindInMap [ EnvironmentMap, !Ref Environment, qty ]
