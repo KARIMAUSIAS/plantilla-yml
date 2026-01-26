@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-region VPC template for StackSets deployment'
+
+Parameters:
+  AttachIGW:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: Determina si se adjunta un Internet Gateway
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      VpcCidr: 10.0.0.0/20
+      SubnetCidr: 10.0.1.0/24
+    us-west-2:
+      VpcCidr: 172.16.0.0/20
+      SubnetCidr: 172.16.1.0/24
+
+Conditions:
+  AttachIGWCondition: !Equals [!Ref AttachIGW, 'true']
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [RegionMap, !Ref 'AWS::Region', VpcCidr]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'VPC-${AWS::Region}'
+
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [RegionMap, !Ref 'AWS::Region', SubnetCidr]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'Subnet-${AWS::Region}'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: AttachIGWCondition
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'IGW-${AWS::Region}'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: AttachIGWCondition
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'RouteTable-${AWS::Region}'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Condition: AttachIGWCondition
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !If [AttachIGWCondition, !Ref InternetGateway, !Ref 'AWS::NoValue']
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet
+      RouteTableId: !Ref RouteTable
