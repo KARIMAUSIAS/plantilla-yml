@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'S3 Bucket with configurable access levels and storage classes'
+
+Mappings:
+  StorageClassMap:
+    Standard:
+      StorageClass: STANDARD
+    IntelligentTiering:
+      StorageClass: INTELLIGENT_TIERING
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Nombre del bucket S3
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+    ConstraintDescription: Solo minusculas, numeros y guiones. Debe empezar y terminar con letra o numero
+  
+  AccessLevel:
+    Type: String
+    Default: Privado
+    AllowedValues: [Privado, Publico]
+    Description: Nivel de acceso del bucket
+  
+  StorageType:
+    Type: String
+    Default: Standard
+    AllowedValues: [Standard, IntelligentTiering]
+    Description: Tipo de almacenamiento
+
+Conditions:
+  IsPublicBucket: !Equals [!Ref AccessLevel, 'Publico']
+  IsPrivateBucket: !Equals [!Ref AccessLevel, 'Privado']
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: !If [IsPublicBucket, false, true]
+        BlockPublicPolicy: !If [IsPublicBucket, false, true]
+        IgnorePublicAcls: !If [IsPublicBucket, false, true]
+        RestrictPublicBuckets: !If [IsPublicBucket, false, true]
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - StorageClass: !FindInMap [StorageClassMap, !Ref StorageType, StorageClass]
+                TransitionInDays: 30
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Ref BucketName
+        - Key: AccessLevel
+          Value: !Ref AccessLevel
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsPublicBucket
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub '${S3Bucket.Arn}/*'
+          - Sid: PublicListBucket
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:ListBucket'
+            Resource: !GetAtt S3Bucket.Arn
+
+  PrivateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsPrivateBucket
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: 
+              - !GetAtt S3Bucket.Arn
+              - !Sub '${S3Bucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+Outputs:
+  BucketARN:
+    Description: ARN del bucket S3
+    Value: !GetAtt S3Bucket.Arn
+  
+  BucketName:
+    Description: Nombre del bucket S3
+    Value: !Ref S3Bucket
+  
+  UploadURL:
+    Description: URL para carga de archivos
+    Value: !Sub 'https://${S3Bucket}.s3.${AWS::Region}.amazonaws.com'
+  
+  WebsiteURL:
+    Description: URL del sitio web (solo si es publico)
+    Condition: IsPublicBucket
+    Value: !Sub 'https://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com'

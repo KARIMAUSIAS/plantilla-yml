@@ -6,11 +6,11 @@ Parameters:
     Type: String
     AllowedValues: ['true', 'false']
     Default: 'true'
-    Description: Determina si el ALB es público (internet-facing) o interno
+    Description: Determina si el ALB es publico (internet-facing) o interno
 
   NombreBase:
     Type: String
-    Default: 'vívalalandingzone'
+    Default: 'vivalalandingzone'
     Description: Nombre base para los recursos
 
   InstanceType:
@@ -230,16 +230,3 @@ Resources:
         - Key: Name
           Value: !Join ['-', [!Ref NombreBase, 'Karim', 'ASG-Instance']]
           PropagateAtLaunch: true
-
-Outputs:
-  ALBDNSName:
-    Description: DNS name of the Application Load Balancer
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-  
-  ALBScheme:
-    Description: ALB Scheme (internet-facing or internal)
-    Value: !If [ALBPublicoCondition, 'internet-facing', 'internal']
-  
-  AutoScalingGroupName:
-    Description: Auto Scaling Group Name
-    Value: !Ref AutoScalingGroup

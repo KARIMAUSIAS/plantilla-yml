@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'RDS MySQL deployment in private subnets with Multi-AZ'
+
+Mappings:
+  InstanceTypeMap:
+    Dev:
+      DBInstanceClass: db.t3.micro
+    Prod:
+      DBInstanceClass: db.t3.medium
+
+Parameters:
+  Ambiente:
+    Type: String
+    Default: Dev
+    AllowedValues: [Dev, Prod]
+    Description: Ambiente de despliegue
+  
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: ID de la VPC donde desplegar RDS
+  
+  PrivateSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: ID de la primera subred privada
+  
+  PrivateSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: ID de la segunda subred privada
+  
+  DBEngineVersion:
+    Type: String
+    Default: '8.0.43'
+    Description: Version del motor MySQL
+  
+  DBUsername:
+    Type: String
+    Default: admin
+    Description: Usuario maestro de la base de datos
+    MinLength: 1
+    MaxLength: 16
+  
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Contraseña del usuario maestro
+    MinLength: 8
+    MaxLength: 41
+
+Resources:
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group para RDS MySQL
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 20.0.0.0/16
+          Description: Acceso MySQL desde subredes privadas
+      Tags:
+        - Key: Name
+          Value: !Sub '${Ambiente}-RDS-SecurityGroup'
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group para RDS en subredes privadas
+      SubnetIds:
+        - !Ref PrivateSubnet1Id
+        - !Ref PrivateSubnet2Id
+      Tags:
+        - Key: Name
+          Value: !Sub '${Ambiente}-DB-SubnetGroup'
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${Ambiente}-mysql-db'
+      DBInstanceClass: !FindInMap [InstanceTypeMap, !Ref Ambiente, DBInstanceClass]
+      Engine: mysql
+      EngineVersion: !Ref DBEngineVersion
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: 20
+      StorageType: gp2
+      MultiAZ: true
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Ambiente}-MySQL-RDS'
+        - Key: Environment
+          Value: !Ref Ambiente
+
+Outputs:
+  DBEndpoint:
+    Description: Endpoint de la base de datos RDS
+    Value: !GetAtt RDSInstance.Endpoint.Address
+  
+  DBPort:
+    Description: Puerto de la base de datos
+    Value: !GetAtt RDSInstance.Endpoint.Port
+  
+  DBInstanceId:
+    Description: ID de la instancia RDS
+    Value: !Ref RDSInstance
+  
+  SecurityGroupId:
+    Description: ID del Security Group de RDS
+    Value: !Ref DBSecurityGroup
